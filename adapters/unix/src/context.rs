@@ -241,10 +241,18 @@ async fn process_adapter_message(
         Message::RemoveAdapter { id } => {
             if let Ok(index) = adapters.binary_search_by(|entry| entry.id.cmp(&id)) {
                 adapters.remove(index);
+                if let Some(bus) = atspi_bus {
+                    bus.unregister_adapter(id).await?;
+                }
             }
         }
         Message::RegisterInterfaces { node, interfaces } => {
-            if let Some(bus) = atspi_bus {
+            // Activation can enqueue registrations behind an already queued
+            // removal. Do not recreate the removed adapter's object paths.
+            let registered = adapters
+                .binary_search_by_key(&node.adapter_id(), |entry| entry.id)
+                .is_ok();
+            if let Some(bus) = atspi_bus.as_ref().filter(|_| registered) {
                 bus.register_interfaces(node, interfaces).await?
             }
         }

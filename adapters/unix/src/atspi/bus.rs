@@ -8,6 +8,7 @@ use crate::{
     context::get_or_init_app_context,
     executor::{Executor, Task},
 };
+use super::object_id::adapter_path;
 use accesskit_atspi_common::{
     DocumentEvent, FullNodeId, NodeIdOrRoot, ObjectEvent, PlatformNode, PlatformRoot, Property,
     WindowEvent,
@@ -189,6 +190,18 @@ impl Bus {
             false,
             |result| result,
         )
+    }
+
+    pub(crate) async fn unregister_adapter(&self, id: usize) -> zbus::Result<()> {
+        // An adapter path has only the built-in D-Bus interfaces. Removing
+        // Peer drops the entry and all of its accessible descendants.
+        let peer = InterfaceName::from_static_str_unchecked("org.freedesktop.DBus.Peer");
+        let result = self
+            .conn
+            .object_server()
+            .remove_named(adapter_path(id), peer)
+            .await;
+        map_or_ignoring_recoverable_error(result, (), |_| ())
     }
 
     pub(crate) async fn unregister_interfaces(
